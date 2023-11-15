@@ -1,0 +1,61 @@
+from surprise import Dataset, Reader, KNNBasic
+from surprise.model_selection import cross_validate, train_test_split
+
+# Load your movie rating dataset (assuming it's in a CSV file)
+# Replace 'your_dataset.csv' with the actual file path
+import pandas as pd
+
+df = pd.read_csv('your_dataset.csv')
+
+# Create a Surprise Reader object
+reader = Reader(rating_scale=(1, 5))
+
+# Load data into Surprise Dataset format
+data = Dataset.load_from_df(df[['user_id', 'movie_id', 'rating']], reader)
+
+# Split the data into training and testing sets
+trainset, testset = train_test_split(data, test_size=0.25, random_state=42)
+
+# Use the KNNBasic collaborative filtering algorithm
+# You can experiment with other algorithms provided by Surprise
+sim_options = {'name': 'cosine', 'user_based': True}
+model = KNNBasic(sim_options=sim_options)
+
+# Train the model on the training set
+model.fit(trainset)
+
+# Make predictions on the test set
+predictions = model.test(testset)
+
+# Evaluate the model using RMSE (Root Mean Squared Error)
+from surprise import accuracy
+
+accuracy.rmse(predictions)
+
+# Function to get movie recommendations for a given user
+def get_recommendations(user_id, n=10):
+    # Get all movie ids
+    all_movie_ids = df['movie_id'].unique()
+
+    # Remove movies the user has already rated
+    movies_rated_by_user = df[df['user_id'] == user_id]['movie_id'].tolist()
+    movies_to_predict = list(set(all_movie_ids) - set(movies_rated_by_user))
+
+    # Make predictions for movies not yet rated by the user
+    predictions = [model.predict(user_id, movie_id) for movie_id in movies_to_predict]
+
+    # Sort predictions by estimated rating in descending order
+    sorted_predictions = sorted(predictions, key=lambda x: x.est, reverse=True)
+
+    # Get top N recommendations
+    top_recommendations = sorted_predictions[:n]
+
+    # Display the top recommendations
+    for i, recommendation in enumerate(top_recommendations):
+        movie_id = recommendation.iid
+        estimated_rating = recommendation.est
+        movie_title = df[df['movie_id'] == movie_id]['movie_title'].values[0]
+        print(f"Recommendation #{i + 1}: {movie_title} (Movie ID: {movie_id}), Estimated Rating: {estimated_rating:.2f}")
+
+# Example: Get recommendations for user with user_id = 1
+get_recommendations(user_id=1, n=5)
